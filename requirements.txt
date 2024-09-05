@@ -10,6 +10,5 @@ requests
 Pillow
 sentencepiece
 transformers
-torch
-tensorflow
+
 
