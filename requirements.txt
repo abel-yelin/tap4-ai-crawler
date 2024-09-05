@@ -10,6 +10,6 @@ requests
 Pillow
 sentencepiece
 transformers
-torch==1.9.0
-tensorflow==2.5.0
-flax==0.3.4
+torch
+tensorflow
+flax
