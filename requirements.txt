@@ -1,14 +1,24 @@
-beautifulsoup4
-pyppeteer
-fastapi[all]
-uvicorn
-python-dotenv
-groq
-boto3
-datetime
-requests
-Pillow
-sentencepiece
-transformers
+# Web Framework
+fastapi[all]==0.115.5
+uvicorn[standard]==0.32.1
+
+# Web Scraping
+beautifulsoup4==4.12.3
+pyppeteer==2.0.0
+requests==2.32.3
+
+# LLM Integration
+groq==0.11.0
+transformers==4.46.3
+sentencepiece==0.2.0
+
+# Storage
+boto3==1.35.66
+
+# Image Processing
+Pillow==11.0.0
+
+# Utilities
+python-dotenv==1.0.1
 
 

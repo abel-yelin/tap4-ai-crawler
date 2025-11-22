@@ -1,0 +1,66 @@
+version: '3.8'
+
+services:
+  ai-crawler:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: aibesttop-ai-crawler
+    ports:
+      - "${PORT:-8040}:8040"
+    environment:
+      # LLM Configuration
+      - GROQ_API_KEY=${GROQ_API_KEY}
+      - GROQ_MODEL=${GROQ_MODEL:-llama3-70b-8192}
+      - GROQ_MAX_TOKENS=${GROQ_MAX_TOKENS:-5000}
+
+      # Object Storage Configuration (Cloudflare R2)
+      - S3_ENDPOINT_URL=${S3_ENDPOINT_URL}
+      - S3_BUCKET_NAME=${S3_BUCKET_NAME}
+      - S3_ACCESS_KEY_ID=${S3_ACCESS_KEY_ID}
+      - S3_SECRET_ACCESS_KEY=${S3_SECRET_ACCESS_KEY}
+      - S3_CUSTOM_DOMAIN=${S3_CUSTOM_DOMAIN:-}
+
+      # API Authentication
+      - AUTH_SECRET=${AUTH_SECRET}
+
+      # LLM Prompts (Optional - will use defaults if not provided)
+      - DETAIL_SYS_PROMPT=${DETAIL_SYS_PROMPT:-}
+      - TAG_SELECTOR_SYS_PROMPT=${TAG_SELECTOR_SYS_PROMPT:-}
+      - LANGUAGE_SYS_PROMPT=${LANGUAGE_SYS_PROMPT:-}
+
+      # Application Settings
+      - PORT=${PORT:-8040}
+
+    volumes:
+      - ./logs:/app/logs
+
+    restart: unless-stopped
+
+    healthcheck:
+      test: ["CMD", "python", "-c", "import requests; requests.get('http://localhost:8040/health', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+    # Security options
+    security_opt:
+      - no-new-privileges:true
+
+    # Resource limits (adjust based on your needs)
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 4G
+        reservations:
+          cpus: '1'
+          memory: 2G
+
+    networks:
+      - ai-crawler-network
+
+networks:
+  ai-crawler-network:
+    driver: bridge

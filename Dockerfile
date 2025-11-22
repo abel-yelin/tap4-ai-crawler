@@ -1,51 +1,91 @@
-# 阶段1: 构建应用程序
-FROM python:3.10 AS builder
+# Multi-stage build for optimized Docker image
+# Stage 1: Builder
+FROM python:3.11-slim AS builder
 
-# 1.1 复制必要文件
+# Set working directory
 WORKDIR /app
-COPY requirements.txt /app/
-COPY weiruanyahei.ttf /app/
-COPY util/* /app/util/
-COPY .env /app/
+
+# Install system dependencies for building
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy requirements first for better layer caching
+COPY requirements.txt .
+
+# Install Python dependencies
+RUN pip install --no-cache-dir --upgrade pip && \
+    pip install --no-cache-dir --target=/app/dependencies -r requirements.txt
+
+# Stage 2: Runtime
+FROM python:3.11-slim
+
+# Set environment variables
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONPATH=/app/dependencies \
+    PORT=8040
+
+# Install runtime dependencies for Pyppeteer/Chromium
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    # Chromium dependencies
+    libnss3 \
+    libnspr4 \
+    libatk1.0-0 \
+    libatk-bridge2.0-0 \
+    libcups2 \
+    libdrm2 \
+    libdbus-1-3 \
+    libxkbcommon0 \
+    libatspi2.0-0 \
+    libxcomposite1 \
+    libxdamage1 \
+    libxfixes3 \
+    libxrandr2 \
+    libgbm1 \
+    libasound2 \
+    libpango-1.0-0 \
+    libcairo2 \
+    libxshmfence1 \
+    fonts-liberation \
+    libappindicator3-1 \
+    libgtk-3-0 \
+    libx11-xcb1 \
+    # Utilities
+    ca-certificates \
+    wget \
+    && rm -rf /var/lib/apt/lists/*
+
+# Create app directory
+WORKDIR /app
+
+# Copy Chinese font for proper rendering
+RUN mkdir -p /usr/share/fonts/chinese/
+COPY weiruanyahei.ttf /usr/share/fonts/chinese/
+RUN fc-cache -fv || true
+
+# Copy Python dependencies from builder
+COPY --from=builder /app/dependencies /app/dependencies
+
+# Copy application code
+COPY util/ /app/util/
 COPY *.py /app/
 
-# 1.2 安装python依赖
-RUN pip config set global.index-url https://mirrors.aliyun.com/pypi/simple/
-RUN pip install --target=/app/dependencies -r requirements.txt
+# Create logs directory and set permissions
+RUN mkdir -p /app/logs && \
+    chmod +x /app/main*.py && \
+    useradd -m -u 1000 appuser && \
+    chown -R appuser:appuser /app
 
-# 阶段2: 创建轻量级的运行时镜像
-FROM python:3.10-slim
+# Switch to non-root user for security
+USER appuser
 
-# 2.1 复制字体，避免乱码
-WORKDIR /usr/share/fonts/chinese/
-COPY --from=builder /app/weiruanyahei.ttf /usr/share/fonts/chinese/
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
+    CMD python -c "import requests; requests.get('http://localhost:${PORT}/health', timeout=5)" || exit 1
 
-# 2.2 复制执行所需的文件
-COPY --from=builder /app/dependencies /app/dependencies
-COPY --from=builder  /app/util/* /app/util/
-COPY --from=builder  /app/.env /app/
-COPY --from=builder  /app/*.py /app/
+# Expose port
+EXPOSE ${PORT}
 
-# 2.3 安装依赖
-RUN apt-get update
-RUN apt-get install -y libnss3 libnspr4 libatk1.0-0 libatk-bridge2.0-0 \
-libcups2 libdrm2 libdbus-1-3 libxkbcommon0 libatspi2.0-0 libxcomposite1 libxdamage1 \
-libxfixes3 libxrandr2 libgbm1 libasound2 libpango-1.0-0 libcairo2
-RUN rm -rf /var/lib/apt/lists/*
-# 安装 uvicorn
-RUN pip install --no-cache-dir uvicorn
-
-WORKDIR /app
-# 2.4 赋予python.sh/py执行权限, 并创建logs目录
-RUN chmod +x /app/main*.py
-RUN mkdir -p /app/logs
-
-# 2.5 暴露端口
-EXPOSE 8040
-
-# 2.6 设置 PYTHONPATH 环境变量
-ENV PYTHONPATH=/app/dependencies
-
-# 2.7 运行脚本
-# 启动 main_api.py，并将输出重定向到日志文件
-CMD uvicorn main_api:app --host 0.0.0.0 --port 8040 --workers 4
+# Start application
+CMD ["sh", "-c", "uvicorn main_api:app --host 0.0.0.0 --port ${PORT} --workers 2 --log-level info"]

@@ -33,6 +33,30 @@ class AsyncURLRequest(URLRequest):
     key: str
 
 
+@app.get('/health')
+async def health_check():
+    """Health check endpoint for container orchestration"""
+    return {
+        'status': 'healthy',
+        'service': 'ai-crawler',
+        'version': '1.0.0'
+    }
+
+
+@app.get('/')
+async def root():
+    """Root endpoint with API information"""
+    return {
+        'message': 'Tap4 AI Crawler API',
+        'version': '1.0.0',
+        'endpoints': {
+            'health': '/health',
+            'crawl': '/site/crawl',
+            'crawl_async': '/site/crawl_async'
+        }
+    }
+
+
 @app.post('/site/crawl')
 async def scrape(request: URLRequest, authorization: Optional[str] = Header(None)):
     url = request.url
